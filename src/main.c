@@ -1,24 +1,33 @@
 #include "stm32f446xx.h"
+#include "gpio.h"
 
 extern uint32_t SystemCoreClock;
 
 #define UART_BRR(clk, baud) (((clk) + ((baud) / 2U)) / (baud))
 
 static void led_init(void) {
-  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-
-  GPIOA->MODER &= ~(3UL << (5 * 2));
-  GPIOA->MODER |= (GPIO_MODE_OUTPUT << (5 * 2));
+  gpio_config_t led_cfg = {
+      .mode = GPIO_MODE_OUTPUT,
+      .otype = GPIO_OUTPUT_PUSH_PULL,
+      .speed = GPIO_SPEED_LOW,
+      .pull = GPIO_PULL_NONE,
+      .alternate_function = 0,
+  };
+  gpio_init(GPIOA, 5, &led_cfg);
 }
 
 static void uart2_init(void) {
-  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
   RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
 
-  GPIOA->MODER &= ~((3UL << (2 * 2)) | (3UL << (3 * 2)));
-  GPIOA->MODER |= ((GPIO_MODE_AF << (2 * 2)) | (GPIO_MODE_AF << (3 * 2)));
-  GPIOA->AFR[0] &= ~((0xFUL << (4 * 2)) | (0xFUL << (4 * 3)));
-  GPIOA->AFR[0] |= ((7UL << (4 * 2)) | (7UL << (4 * 3)));
+  gpio_config_t uart_pin_cfg = {
+      .mode = GPIO_MODE_ALTERNATE,
+      .otype = GPIO_OUTPUT_PUSH_PULL,
+      .speed = GPIO_SPEED_LOW,
+      .pull = GPIO_PULL_NONE,
+      .alternate_function = 7, /* AF7 = USART2 on PA2 (TX) / PA3 (RX) */
+  };
+  gpio_init(GPIOA, 2, &uart_pin_cfg);
+  gpio_init(GPIOA, 3, &uart_pin_cfg);
 
   USART2->BRR = UART_BRR(SystemCoreClock, 115200UL);
   USART2->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
@@ -69,8 +78,8 @@ int main(void) {
 
   uint32_t count = 0;
   for (;;) {
-    GPIOA->ODR ^= (1UL << 5);
-    delay_ms(500);
+    gpio_toggle(GPIOA, 5);
+    delay_ms(1500);
 
     uart2_write("tick ");
     uart2_write_u32(count++);

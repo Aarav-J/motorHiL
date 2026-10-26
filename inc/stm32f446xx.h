@@ -59,11 +59,6 @@ typedef struct {
 #define GPIOA_BASE (AHB1PERIPH_BASE + 0x0000UL)
 #define GPIOA      ((GPIO_TypeDef *)GPIOA_BASE)
 
-#define GPIO_MODE_INPUT  0x0UL
-#define GPIO_MODE_OUTPUT 0x1UL
-#define GPIO_MODE_AF     0x2UL
-#define GPIO_MODE_ANALOG 0x3UL
-
 /* ------------------------------------------------------------- USART */
 typedef struct {
   __IO uint32_t SR;

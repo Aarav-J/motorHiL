@@ -22,9 +22,10 @@ OPENOCD_CFG = openocd.cfg
 SRCS = \
   startup/startup_stm32f446xx.s \
   src/system_stm32f446xx.c \
-  src/main.c
+  src/main.c \
+  drivers/gpio.c
 
-INCLUDES = -Iinc
+INCLUDES = -Iinc -Idrivers
 
 MCU_FLAGS = -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
@@ -40,7 +41,7 @@ LDFLAGS  = $(MCU_FLAGS) -T$(LDSCRIPT) \
 
 OBJS = $(addprefix $(BUILDDIR)/,$(notdir $(SRCS:.c=.o)))
 OBJS := $(OBJS:.s=.o)
-vpath %.c src
+vpath %.c src drivers
 vpath %.s startup
 
 ELF = $(BUILDDIR)/$(TARGET).elf
