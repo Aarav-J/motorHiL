@@ -41,12 +41,14 @@ typedef struct {
 #define RCC       ((RCC_TypeDef *)RCC_BASE)
 
 #define RCC_AHB1ENR_GPIOAEN  (1UL << 0)
+#define RCC_AHB1ENR_GPIOBEN  (1UL << 1)
 #define RCC_APB1ENR_USART2EN (1UL << 17)
 #define RCC_APB1ENR_USART3EN (1UL << 18)
 #define RCC_APB1ENR_UART4EN  (1UL << 19)
 #define RCC_APB1ENR_UART5EN  (1UL << 20)
 #define RCC_APB2ENR_USART1EN (1UL << 4)
 #define RCC_APB2ENR_USART6EN (1UL << 5)
+#define RCC_APB1ENR_TIM4EN   (1UL << 2)
 
 /* --------------------------------------------------------------- GPIO */
 typedef struct {
@@ -63,7 +65,8 @@ typedef struct {
 
 #define GPIOA_BASE (AHB1PERIPH_BASE + 0x0000UL)
 #define GPIOA      ((GPIO_TypeDef *)GPIOA_BASE)
-
+#define GPIOB_BASE (AHB1PERIPH_BASE + 0x0400UL)
+#define GPIOB      ((GPIO_TypeDef *)GPIOB_BASE)
 /* ------------------------------------------------------------- USART */
 typedef struct {
   __IO uint32_t SR;
@@ -97,6 +100,35 @@ typedef struct {
 #define USART_CR1_PCE (1UL << 10)
 #define USART_CR1_M   (1UL << 12)
 #define USART_CR1_UE  (1UL << 13)
+
+
+
+
+/* ------------------------------------------------------------- TIMERS */ 
+ typedef struct {
+     __IO uint32_t CR1;
+     __IO uint32_t CR2;
+     __IO uint32_t SMCR;
+     __IO uint32_t DIER;
+     __IO uint32_t SR;
+     __IO uint32_t EGR;
+     __IO uint32_t CCMR1;
+     __IO uint32_t CCMR2;
+     __IO uint32_t CCER;
+     __IO uint32_t CNT;
+     __IO uint32_t PSC;
+     __IO uint32_t ARR;
+     uint32_t      RESERVED0;
+     __IO uint32_t CCR1;
+     __IO uint32_t CCR2;
+     __IO uint32_t CCR3;
+     __IO uint32_t CCR4;
+} TIM_TypeDef;
+#define TIM4_BASE (APB1PERIPH_BASE + 0x0800UL)
+#define TIM4      ((TIM_TypeDef *)TIM4_BASE)
+
+
+
 
 /* ------------------------------------------------------------ SysTick */
 typedef struct {
