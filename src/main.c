@@ -1,5 +1,5 @@
-#include "stm32f446xx.h"
 #include "gpio.h"
+#include "stm32f446xx.h"
 #include "uart.h"
 
 extern uint32_t SystemCoreClock;
@@ -62,47 +62,49 @@ static void delay_ms(uint32_t ms) {
   }
   SysTick->CTRL = 0;
 }
+// RAW-REGISTER A/B TEST VERSION -- no pwm.c driver calls at all, to
+// isolate whether a prior "broken scope trace" came from drivers/pwm.c
+// or from something external (probing/grounding/scope settings).
+// Matched to the SAME target as the driver version (1kHz / 75% duty,
+// PB6 = TIM4_CH1) so this is a true apples-to-apples comparison.
+static void pwm_timer_init(void) {
+  gpio_config_t pwm_pin_cfg = {
+      .mode = GPIO_MODE_ALTERNATE,
+      .otype = GPIO_OUTPUT_PUSH_PULL,
+      .speed = GPIO_SPEED_LOW,
+      .pull = GPIO_PULL_NONE,
+      .alternate_function = 2, /* AF2 = TIM4 on PB6 (TIM4_CH1) */
+  };
+  gpio_init(GPIOB, 6, &pwm_pin_cfg);
 
-// Initializing TIM4 for PWM generation on PA6 (TIM4_CH1)
-static void pwm_timer_init(void) { 
-   gpio_config_t pwm_pin_cfg = { 
-        .mode=GPIO_MODE_ALTERNATE, 
-        .otype=GPIO_OUTPUT_PUSH_PULL,
-        .speed=GPIO_SPEED_LOW,
-        .pull=GPIO_PULL_NONE,
-        .alternate_function=2, /* AF2 = TIM4 on PB6 (TIM4_CH1) */
-    };
-    gpio_init(GPIOB, 6, &pwm_pin_cfg);
-    // Enable TIM4 Clock 
-    RCC->APB1ENR |= RCC_APB1ENR_TIM4EN; 
-    //Set PSC and ARR for 1khz at 25% duty cycle
-    TIM4->PSC = 16000 - 1; // Prescaler for 1
-    TIM4->ARR = 1000 - 1; // Auto-reload for 1kHz
-    // Configure CCMR1 
-    TIM4->CCMR1 |= (6U << 4); // PWM mode 1 on CH1
-    TIM4->CCMR1 |= (1U << 3); // Enable preload for TIM4->CCMR1
-    // set CCR1 for 25% duty cycle
-    TIM4->CCR1 = 500; // 25% of ARR
-    // Enable TIM4->CCER for CH1
-    TIM4->CCER |= (1U << 0); 
-    // Set ARPE
-    TIM4->CR1 |= (1U << 7); 
-    // Enable 
-    TIM4->CR1 |= (1u << 0); 
+  RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
+
+  // 16MHz / (PSC+1) / (ARR+1) = 16MHz/1/16000 = 1kHz
+  TIM4->PSC = 0;
+  TIM4->ARR = 16000 - 1;
+
+  TIM4->CCMR1 |= (6U << 4); // OC1M = PWM mode 1
+  TIM4->CCMR1 |= (1U << 3); // OC1PE preload enable
+
+  TIM4->CCR1 = 12000; // 75% of 16000
+
+  TIM4->CCER |= (1U << 0); // CC1E
+  TIM4->CR1 |= (1U << 7);  // ARPE
+  TIM4->CR1 |= (1U << 0);  // CEN
 }
 int main(void) {
-    led_init();
-    uart2_init();
+  led_init();
+  uart2_init();
 
-    uart_write_string(USART2, "\r\nSTM32F446RE bare-metal boot OK\r\n");
-    delay_ms(1000);
-    uint32_t count = 0;
-    pwm_timer_init(); 
-    for (;;) {
+  uart_write_string(USART2, "\r\nSTM32F446RE bare-metal boot OK\r\n");
+  delay_ms(1000);
+  uint32_t count = 0;
+  pwm_timer_init();
+  for (;;) {
     gpio_toggle(GPIOA, 5);
-    delay_ms(1500); 
+    delay_ms(1500);
     uart_write_string(USART2, "tick ");
     uart2_write_u32(count++);
     uart_write_string(USART2, "\r\n");
-    }
+  }
 }
