@@ -42,6 +42,11 @@ typedef struct {
 
 #define RCC_AHB1ENR_GPIOAEN  (1UL << 0)
 #define RCC_APB1ENR_USART2EN (1UL << 17)
+#define RCC_APB1ENR_USART3EN (1UL << 18)
+#define RCC_APB1ENR_UART4EN  (1UL << 19)
+#define RCC_APB1ENR_UART5EN  (1UL << 20)
+#define RCC_APB2ENR_USART1EN (1UL << 4)
+#define RCC_APB2ENR_USART6EN (1UL << 5)
 
 /* --------------------------------------------------------------- GPIO */
 typedef struct {
@@ -70,14 +75,28 @@ typedef struct {
   __IO uint32_t GTPR;
 } USART_TypeDef;
 
+#define USART1_BASE (APB2PERIPH_BASE + 0x1000UL)
+#define USART1      ((USART_TypeDef *)USART1_BASE)
 #define USART2_BASE (APB1PERIPH_BASE + 0x4400UL)
 #define USART2      ((USART_TypeDef *)USART2_BASE)
+#define USART3_BASE (APB1PERIPH_BASE + 0x4800UL)
+#define USART3      ((USART_TypeDef *)USART3_BASE)
+#define UART4_BASE  (APB1PERIPH_BASE + 0x4C00UL)
+#define UART4       ((USART_TypeDef *)UART4_BASE)
+#define UART5_BASE  (APB1PERIPH_BASE + 0x5000UL)
+#define UART5       ((USART_TypeDef *)UART5_BASE)
+#define USART6_BASE (APB2PERIPH_BASE + 0x1400UL)
+#define USART6      ((USART_TypeDef *)USART6_BASE)
 
-#define USART_SR_TXE  (1UL << 7)
+#define USART_SR_RXNE (1UL << 5)
 #define USART_SR_TC   (1UL << 6)
-#define USART_CR1_UE  (1UL << 13)
-#define USART_CR1_TE  (1UL << 3)
+#define USART_SR_TXE  (1UL << 7)
 #define USART_CR1_RE  (1UL << 2)
+#define USART_CR1_TE  (1UL << 3)
+#define USART_CR1_PS  (1UL << 9)
+#define USART_CR1_PCE (1UL << 10)
+#define USART_CR1_M   (1UL << 12)
+#define USART_CR1_UE  (1UL << 13)
 
 /* ------------------------------------------------------------ SysTick */
 typedef struct {

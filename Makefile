@@ -23,7 +23,8 @@ SRCS = \
   startup/startup_stm32f446xx.s \
   src/system_stm32f446xx.c \
   src/main.c \
-  drivers/gpio.c
+  drivers/gpio.c \
+  drivers/uart.c
 
 INCLUDES = -Iinc -Idrivers
 
