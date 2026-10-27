@@ -6,6 +6,11 @@
 
 extern uint32_t SystemCoreClock;
 
+// Encoder RPM test config: CPR=4 means "1 AD2 Gray-code cycle = 1 revolution",
+// so expected RPM = AD2_pattern_frequency_Hz * 60 
+#define ENCODER_CPR 4
+#define ENCODER_SAMPLE_MS 100
+
 static void led_init(void) {
   gpio_config_t led_cfg = {
       .mode = GPIO_MODE_OUTPUT,
@@ -51,6 +56,28 @@ static void uart2_write_u32(uint32_t v) {
     v /= 10;
   }
   uart_write_string(USART2, &buf[i]);
+}
+
+static void uart2_write_i32(int32_t v) {
+  if (v < 0) {
+    uart_write_string(USART2, "-");
+    v = -v;
+  }
+  uart2_write_u32((uint32_t)v);
+}
+
+// Prints with one decimal place, e.g. 5999.8 -- RPM is a float but this
+// project doesn't link printf, so format it by hand: scale by 10, split
+// into whole/tenths, handle the sign ourselves.
+static void uart2_write_rpm(float rpm) {
+  if (rpm < 0.0f) {
+    uart_write_string(USART2, "-");
+    rpm = -rpm;
+  }
+  int32_t scaled = (int32_t)(rpm * 10.0f + 0.5f); // round to nearest 0.1
+  uart2_write_u32((uint32_t)(scaled / 10));
+  uart_write_string(USART2, ".");
+  uart2_write_u32((uint32_t)(scaled % 10));
 }
 
 static void delay_ms(uint32_t ms) {
@@ -112,9 +139,14 @@ int main(void) {
   uint32_t count = 0;
   tim4_pwm_init();
   TIM3_encoder_init();
+  uint16_t last_count = encoder_get_count(TIM3);
   for (;;) {
     gpio_toggle(GPIOA, 5);
-    delay_ms(1500);
+    delay_ms(ENCODER_SAMPLE_MS); // known, fixed sampling interval
+
+    int16_t delta = encoder_get_delta(TIM3, &last_count);
+    float rpm = encoder_get_rpm(delta, ENCODER_SAMPLE_MS, ENCODER_CPR);
+
     uart_write_string(USART2, "tick ");
     uart2_write_u32(count++);
     uart_write_string(USART2, "  enc_cnt=");
@@ -122,6 +154,10 @@ int main(void) {
     uart_write_string(USART2, encoder_get_direction(TIM3) == ENCODER_DIR_UP
                                   ? "  dir=UP"
                                   : "  dir=DOWN");
+    uart_write_string(USART2, "  delta=");
+    uart2_write_i32(delta);
+    uart_write_string(USART2, "  rpm=");
+    uart2_write_rpm(rpm);
     uart_write_string(USART2, "\r\n");
   }
 }

@@ -67,3 +67,23 @@ void encoder_reset_count(TIM_TypeDef *TIMx) {
   }
   TIMx->CNT = 0;
 }
+
+int16_t encoder_get_delta(TIM_TypeDef *TIMx, uint16_t* last_count) { 
+    if(!encoder_supported(TIMx)) { 
+        return 0; 
+    }
+
+    uint16_t current_count = TIMx->CNT; 
+    uint16_t raw_diff = current_count-(*last_count); 
+    int16_t diff = (int16_t)raw_diff;
+    *last_count = current_count;
+    return diff; 
+}
+
+float encoder_get_rpm(int16_t delta, uint32_t delta_time_ms, uint16_t counts_per_rev) { 
+    float revolutions = (float) delta / (float) counts_per_rev; 
+
+    float rpm = revolutions * (60000.0f / (float) delta_time_ms); 
+
+    return rpm;
+}

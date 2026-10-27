@@ -21,4 +21,7 @@ void encoder_reset_count(TIM_TypeDef *TIMx);
 
 encoder_direction_t encoder_get_direction(TIM_TypeDef *TIMx);
 
+int16_t encoder_get_delta(TIM_TypeDef *TIMx, uint16_t* last_count); 
+float encoder_get_rpm(int16_t delta, uint32_t delta_time_ms, uint16_t counts_per_rev); 
+
 #endif // ENCODER_H
