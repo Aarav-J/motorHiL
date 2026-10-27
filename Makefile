@@ -25,7 +25,8 @@ SRCS = \
   src/main.c \
   drivers/gpio.c \
   drivers/uart.c \
-  drivers/pwm.c
+  drivers/pwm.c \
+  drivers/encoder.c \
 
 INCLUDES = -Iinc -Idrivers
 

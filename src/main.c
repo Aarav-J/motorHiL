@@ -1,3 +1,4 @@
+#include "encoder.h"
 #include "gpio.h"
 #include "pwm.h"
 #include "stm32f446xx.h"
@@ -76,9 +77,31 @@ static void tim4_pwm_init(void) {
   gpio_init(GPIOB, 6, &pwm_pin_cfg);
 
   // 16MHz / (0+1) / 16000 = 1kHz
-  pwm_timer_init(TIM4, 16000 - 1, 1000-1);
+  pwm_timer_init(TIM4, 16000 - 1, 1000 - 1);
   pwm_channel_init(TIM4, 1, PWM_MODE_1);
   pwm_set_duty_percent(TIM4, 1, 75.0f);
+}
+
+static void TIM3_encoder_init(void) {
+  gpio_config_t enc_a_cfg = {
+      .mode = GPIO_MODE_ALTERNATE,
+      .otype = GPIO_OUTPUT_PUSH_PULL,
+      .speed = GPIO_SPEED_LOW,
+      .pull = GPIO_PULL_NONE,
+      .alternate_function = 2,
+  };
+  gpio_init(GPIOA, 6, &enc_a_cfg);
+
+  gpio_config_t enc_b_cfg = {
+      .mode = GPIO_MODE_ALTERNATE,
+      .otype = GPIO_OUTPUT_PUSH_PULL,
+      .speed = GPIO_SPEED_LOW,
+      .pull = GPIO_PULL_NONE,
+      .alternate_function = 2,
+  };
+  gpio_init(GPIOA, 7, &enc_b_cfg);
+
+  encoder_init(TIM3, ENCODER_MODE_X4, 0xFFFF);
 }
 int main(void) {
   led_init();
@@ -88,11 +111,17 @@ int main(void) {
   delay_ms(1000);
   uint32_t count = 0;
   tim4_pwm_init();
+  TIM3_encoder_init();
   for (;;) {
     gpio_toggle(GPIOA, 5);
     delay_ms(1500);
     uart_write_string(USART2, "tick ");
     uart2_write_u32(count++);
+    uart_write_string(USART2, "  enc_cnt=");
+    uart2_write_u32(encoder_get_count(TIM3));
+    uart_write_string(USART2, encoder_get_direction(TIM3) == ENCODER_DIR_UP
+                                  ? "  dir=UP"
+                                  : "  dir=DOWN");
     uart_write_string(USART2, "\r\n");
   }
 }
