@@ -1,4 +1,5 @@
 #include "gpio.h"
+#include "pwm.h"
 #include "stm32f446xx.h"
 #include "uart.h"
 
@@ -62,12 +63,9 @@ static void delay_ms(uint32_t ms) {
   }
   SysTick->CTRL = 0;
 }
-// RAW-REGISTER A/B TEST VERSION -- no pwm.c driver calls at all, to
-// isolate whether a prior "broken scope trace" came from drivers/pwm.c
-// or from something external (probing/grounding/scope settings).
-// Matched to the SAME target as the driver version (1kHz / 75% duty,
-// PB6 = TIM4_CH1) so this is a true apples-to-apples comparison.
-static void pwm_timer_init(void) {
+
+// TIM4_CH1 PWM on PB6 (Arduino header D10), 1kHz / 75% duty
+static void tim4_pwm_init(void) {
   gpio_config_t pwm_pin_cfg = {
       .mode = GPIO_MODE_ALTERNATE,
       .otype = GPIO_OUTPUT_PUSH_PULL,
@@ -77,20 +75,10 @@ static void pwm_timer_init(void) {
   };
   gpio_init(GPIOB, 6, &pwm_pin_cfg);
 
-  RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
-
-  // 16MHz / (PSC+1) / (ARR+1) = 16MHz/1/16000 = 1kHz
-  TIM4->PSC = 0;
-  TIM4->ARR = 16000 - 1;
-
-  TIM4->CCMR1 |= (6U << 4); // OC1M = PWM mode 1
-  TIM4->CCMR1 |= (1U << 3); // OC1PE preload enable
-
-  TIM4->CCR1 = 12000; // 75% of 16000
-
-  TIM4->CCER |= (1U << 0); // CC1E
-  TIM4->CR1 |= (1U << 7);  // ARPE
-  TIM4->CR1 |= (1U << 0);  // CEN
+  // 16MHz / (0+1) / 16000 = 1kHz
+  pwm_timer_init(TIM4, 16000 - 1, 1000-1);
+  pwm_channel_init(TIM4, 1, PWM_MODE_1);
+  pwm_set_duty_percent(TIM4, 1, 75.0f);
 }
 int main(void) {
   led_init();
@@ -99,7 +87,7 @@ int main(void) {
   uart_write_string(USART2, "\r\nSTM32F446RE bare-metal boot OK\r\n");
   delay_ms(1000);
   uint32_t count = 0;
-  pwm_timer_init();
+  tim4_pwm_init();
   for (;;) {
     gpio_toggle(GPIOA, 5);
     delay_ms(1500);

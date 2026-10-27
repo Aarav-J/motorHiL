@@ -10,7 +10,7 @@ static uint8_t pwm_max_channels(TIM_TypeDef *TIMx) {
   return 4; // TIM1, TIM2, TIM3, TIM4, TIM5, TIM8
 }
 
-void pwm_timer_init(TIM_TypeDef *TIMx, const pwm_timer_config_t *config) {
+void pwm_timer_init(TIM_TypeDef *TIMx, uint16_t psc, uint32_t arr) {
 
   if (TIMx == TIM1) {
     RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
@@ -38,19 +38,8 @@ void pwm_timer_init(TIM_TypeDef *TIMx, const pwm_timer_config_t *config) {
     RCC->APB1ENR |= RCC_APB1ENR_TIM14EN;
   }
 
-  // Total counter ticks needed for one PWM period
-  uint32_t ticks_per_period = config->timer_clock_hz / config->frequency_hz;
-
-  // ARR is 16-bit on every one of these timers except TIM2/TIM5 (32-bit).
-  uint32_t psc = 0;
-  uint32_t arr_plus_one = ticks_per_period;
-  while (arr_plus_one > 65536U) {
-    psc++;
-    arr_plus_one = ticks_per_period / (psc + 1);
-  }
-
   TIMx->PSC = psc;
-  TIMx->ARR = arr_plus_one - 1;
+  TIMx->ARR = arr;
 
   TIMx->CR1 |= (1U << 7); // ARPE: buffer ARR writes, latch on update event
   TIMx->EGR |= (1U << 0); // UG: force PSC/ARR to load right now, not on
@@ -64,15 +53,13 @@ void pwm_timer_init(TIM_TypeDef *TIMx, const pwm_timer_config_t *config) {
   }
 }
 
-void pwm_channel_init(TIM_TypeDef *TIMx, uint8_t channel,
-                      const pwm_channel_config_t *config) {
+void pwm_channel_init(TIM_TypeDef *TIMx, uint8_t channel, pwm_mode_t mode) {
   if (channel < 1 || channel > pwm_max_channels(TIMx)) {
     return; // channel doesn't exist
   }
 
   uint32_t ocxm =
-      (uint32_t)
-          config->mode; // 0x6 or 0x7, same 3-bit value regardless of channel
+      (uint32_t)mode; // 0x6 or 0x7, same 3-bit value regardless of channel
 
   switch (channel) {
   case 1:
