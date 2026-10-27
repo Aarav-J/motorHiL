@@ -1,5 +1,6 @@
 #include "encoder.h"
 #include "gpio.h"
+#include "nvic.h"
 #include "pwm.h"
 #include "stm32f446xx.h"
 #include "uart.h"
@@ -7,9 +8,14 @@
 extern uint32_t SystemCoreClock;
 
 // Encoder RPM test config: CPR=4 means "1 AD2 Gray-code cycle = 1 revolution",
-// so expected RPM = AD2_pattern_frequency_Hz * 60 
+// so expected RPM = AD2_pattern_frequency_Hz * 60
 #define ENCODER_CPR 4
 #define ENCODER_SAMPLE_MS 100
+
+// Incremented inside TIM2_IRQHandler -- volatile because main() reads it
+// and the ISR writes it asynchronously; without volatile the -Os build
+// could cache a stale value instead of re-reading it each loop.
+volatile uint32_t isr_fire_count = 0;
 
 static void led_init(void) {
   gpio_config_t led_cfg = {
@@ -130,6 +136,28 @@ static void TIM3_encoder_init(void) {
 
   encoder_init(TIM3, ENCODER_MODE_X4, 0xFFFF);
 }
+// TIM2 fires an update interrupt every 1ms (1kHz) -- this is the
+// verification step for the eventual control loop. The ISR just
+// increments a counter for now; real control-loop work comes after
+// confirming the fire rate is actually correct.
+static void TIM2_control_loop_init(void) {
+  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+
+  // 16MHz / (0+1) / 16000 = 1kHz
+  TIM2->PSC = 0;
+  TIM2->ARR = 16000 - 1;
+  TIM2->DIER |= TIM_DIER_UIE;
+
+  nvic_enable_irq(TIM2_IRQn);
+
+  TIM2->CR1 |= (1U << 0); // CEN
+}
+
+void TIM2_IRQHandler(void) {
+  TIM2->SR &= ~TIM_SR_UIF; // clear first -- otherwise this fires forever
+  isr_fire_count++;
+}
+
 int main(void) {
   led_init();
   uart2_init();
@@ -139,6 +167,7 @@ int main(void) {
   uint32_t count = 0;
   tim4_pwm_init();
   TIM3_encoder_init();
+  TIM2_control_loop_init();
   uint16_t last_count = encoder_get_count(TIM3);
   for (;;) {
     gpio_toggle(GPIOA, 5);
@@ -158,6 +187,8 @@ int main(void) {
     uart2_write_i32(delta);
     uart_write_string(USART2, "  rpm=");
     uart2_write_rpm(rpm);
+    uart_write_string(USART2, "  isr_fires=");
+    uart2_write_u32(isr_fire_count);
     uart_write_string(USART2, "\r\n");
   }
 }

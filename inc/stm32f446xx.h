@@ -183,6 +183,8 @@ typedef struct {
 #define TIM_BDTR_MOE                                                           \
   (1UL << 15) /* Main Output Enable -- TIM1/TIM8 only,                         \
                * PWM output stays off without this */
+#define TIM_DIER_UIE (1UL << 0)
+#define TIM_SR_UIF (1UL << 0)
 
 /* ------------------------------------------------------------ SysTick */
 typedef struct {
@@ -199,5 +201,16 @@ typedef struct {
 #define SysTick_CTRL_TICKINT (1UL << 1)
 #define SysTick_CTRL_CLKSOURCE (1UL << 2) /* 1 = processor clock (HCLK) */
 #define SysTick_CTRL_COUNTFLAG (1UL << 16)
+
+/* ------------------------------------------------------------ NVIC */
+typedef struct {
+  __IO uint32_t ISER[8];  // Interrupt Set Enable Registers
+  uint32_t RESERVED0[24]; // Reserved Space
+  __IO uint32_t ICER[8];  // Interrupt Clear Enable Registers
+  // To be continued with other NVIC registers as I need them
+} NVIC_TypeDef;
+#define NVIC_BASE (0xE000E100UL)
+#define NVIC ((NVIC_TypeDef *)NVIC_BASE)
+#define TIM2_IRQn 28 // Got this from the reference manual
 
 #endif /* STM32F446XX_H */

@@ -27,6 +27,7 @@ SRCS = \
   drivers/uart.c \
   drivers/pwm.c \
   drivers/encoder.c \
+  drivers/nvic.c \
 
 INCLUDES = -Iinc -Idrivers
 
