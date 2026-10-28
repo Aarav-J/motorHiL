@@ -6,6 +6,8 @@
 #include "uart.h"
 
 extern uint32_t SystemCoreClock;
+#define SAMPLE_WINDOW_TICKS 100
+#define LED_TOGGLE_TICKS 1500
 
 // Encoder RPM test config: CPR=4 means "1 AD2 Gray-code cycle = 1 revolution",
 // so expected RPM = AD2_pattern_frequency_Hz * 60
@@ -16,6 +18,9 @@ extern uint32_t SystemCoreClock;
 // and the ISR writes it asynchronously; without volatile the -Os build
 // could cache a stale value instead of re-reading it each loop.
 volatile uint32_t isr_fire_count = 0;
+volatile int16_t latest_delta = 0; 
+volatile uint8_t sample_ready = 0; 
+
 
 static void led_init(void) {
   gpio_config_t led_cfg = {
@@ -156,6 +161,28 @@ static void TIM2_control_loop_init(void) {
 void TIM2_IRQHandler(void) {
   TIM2->SR &= ~TIM_SR_UIF; // clear first -- otherwise this fires forever
   isr_fire_count++;
+
+  static uint32_t window_ticks = 0; 
+  static uint32_t led_ticks = 0; 
+  static uint16_t last_count; 
+  static uint8_t last_count_ready = 0; 
+  if(!last_count_ready) {
+    last_count = encoder_get_count(TIM3); 
+    last_count_ready = 1; 
+  }
+  window_ticks++; 
+  led_ticks++; 
+
+  if (led_ticks >= LED_TOGGLE_TICKS) {
+    gpio_toggle(GPIOA, 5);
+    led_ticks = 0; 
+  }
+  
+  if(window_ticks >= SAMPLE_WINDOW_TICKS) {
+    latest_delta = encoder_get_delta(TIM3, &last_count);
+    sample_ready = 1; 
+    window_ticks = 0; 
+  }
 }
 
 int main(void) {
@@ -164,31 +191,31 @@ int main(void) {
 
   uart_write_string(USART2, "\r\nSTM32F446RE bare-metal boot OK\r\n");
   delay_ms(1000);
-  uint32_t count = 0;
   tim4_pwm_init();
   TIM3_encoder_init();
   TIM2_control_loop_init();
-  uint16_t last_count = encoder_get_count(TIM3);
+  uint32_t count = 0; 
   for (;;) {
-    gpio_toggle(GPIOA, 5);
-    delay_ms(ENCODER_SAMPLE_MS); // known, fixed sampling interval
+    if (sample_ready) { 
+        sample_ready = 0; 
+        int16_t delta = latest_delta; 
+        float rpm = encoder_get_rpm(delta, ENCODER_SAMPLE_MS, ENCODER_CPR);
+        uart_write_string(USART2, "tick ");
+        uart2_write_u32(count++);
+        uart_write_string(USART2, "  enc_cnt=");
+        uart2_write_u32(encoder_get_count(TIM3));
+        uart_write_string(USART2, encoder_get_direction(TIM3) == ENCODER_DIR_UP
+                                      ? "  dir=UP"
+                                      : "  dir=DOWN");
+        uart_write_string(USART2, "  delta=");
+        uart2_write_i32(delta);
+        uart_write_string(USART2, "  rpm=");
+        uart2_write_rpm(rpm);
+        uart_write_string(USART2, "  isr_fires=");
+        uart2_write_u32(isr_fire_count);
+        uart_write_string(USART2, "\r\n");
 
-    int16_t delta = encoder_get_delta(TIM3, &last_count);
-    float rpm = encoder_get_rpm(delta, ENCODER_SAMPLE_MS, ENCODER_CPR);
+    }
 
-    uart_write_string(USART2, "tick ");
-    uart2_write_u32(count++);
-    uart_write_string(USART2, "  enc_cnt=");
-    uart2_write_u32(encoder_get_count(TIM3));
-    uart_write_string(USART2, encoder_get_direction(TIM3) == ENCODER_DIR_UP
-                                  ? "  dir=UP"
-                                  : "  dir=DOWN");
-    uart_write_string(USART2, "  delta=");
-    uart2_write_i32(delta);
-    uart_write_string(USART2, "  rpm=");
-    uart2_write_rpm(rpm);
-    uart_write_string(USART2, "  isr_fires=");
-    uart2_write_u32(isr_fire_count);
-    uart_write_string(USART2, "\r\n");
   }
 }
