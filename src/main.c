@@ -12,15 +12,17 @@ extern uint32_t SystemCoreClock;
 // Encoder RPM test config: CPR=4 means "1 AD2 Gray-code cycle = 1 revolution",
 // so expected RPM = AD2_pattern_frequency_Hz * 60
 #define ENCODER_CPR 4
-#define ENCODER_SAMPLE_MS 100
+#define TARGET_RPM 600.0f
+#define KP 0.1f
 
 // Incremented inside TIM2_IRQHandler -- volatile because main() reads it
 // and the ISR writes it asynchronously; without volatile the -Os build
 // could cache a stale value instead of re-reading it each loop.
 volatile uint32_t isr_fire_count = 0;
-volatile int16_t latest_delta = 0; 
-volatile uint8_t sample_ready = 0; 
-
+volatile int16_t latest_delta = 0;
+volatile float latest_rpm = 0.0f;
+volatile float latest_duty = 0.0f;
+volatile uint8_t sample_ready = 0;
 
 static void led_init(void) {
   gpio_config_t led_cfg = {
@@ -162,26 +164,45 @@ void TIM2_IRQHandler(void) {
   TIM2->SR &= ~TIM_SR_UIF; // clear first -- otherwise this fires forever
   isr_fire_count++;
 
-  static uint32_t window_ticks = 0; 
-  static uint32_t led_ticks = 0; 
-  static uint16_t last_count; 
-  static uint8_t last_count_ready = 0; 
-  if(!last_count_ready) {
-    last_count = encoder_get_count(TIM3); 
-    last_count_ready = 1; 
+  static uint32_t window_ticks = 0;
+  static uint32_t led_ticks = 0;
+  static uint16_t last_count;
+  static uint8_t last_count_ready = 0;
+  if (!last_count_ready) {
+    last_count = encoder_get_count(TIM3);
+    last_count_ready = 1;
   }
-  window_ticks++; 
-  led_ticks++; 
+  window_ticks++;
+  led_ticks++;
 
   if (led_ticks >= LED_TOGGLE_TICKS) {
     gpio_toggle(GPIOA, 5);
-    led_ticks = 0; 
+    led_ticks = 0;
   }
-  
-  if(window_ticks >= SAMPLE_WINDOW_TICKS) {
-    latest_delta = encoder_get_delta(TIM3, &last_count);
-    sample_ready = 1; 
-    window_ticks = 0; 
+
+  if (window_ticks >= SAMPLE_WINDOW_TICKS) {
+    window_ticks = 0;
+
+    int16_t delta = encoder_get_delta(TIM3, &last_count);
+    float measured_rpm =
+        encoder_get_rpm(delta, SAMPLE_WINDOW_TICKS, ENCODER_CPR);
+
+    float error = TARGET_RPM - measured_rpm;
+    float output = KP * error;
+    if (output < 0.0f) {
+      output = 0.0f; // unidirectional drive -- no negative duty, and
+                     // pwm_set_duty_percent has undefined behavior on a
+                     // negative float->uint32_t cast if this isn't clamped
+    }
+    if (output > 100.0f) {
+      output = 100.0f;
+    }
+    pwm_set_duty_percent(TIM4, 1, output);
+
+    latest_delta = delta;
+    latest_rpm = measured_rpm;
+    latest_duty = output;
+    sample_ready = 1; // set last -- only after every value it implies is valid
   }
 }
 
@@ -194,28 +215,29 @@ int main(void) {
   tim4_pwm_init();
   TIM3_encoder_init();
   TIM2_control_loop_init();
-  uint32_t count = 0; 
+  uint32_t count = 0;
   for (;;) {
-    if (sample_ready) { 
-        sample_ready = 0; 
-        int16_t delta = latest_delta; 
-        float rpm = encoder_get_rpm(delta, ENCODER_SAMPLE_MS, ENCODER_CPR);
-        uart_write_string(USART2, "tick ");
-        uart2_write_u32(count++);
-        uart_write_string(USART2, "  enc_cnt=");
-        uart2_write_u32(encoder_get_count(TIM3));
-        uart_write_string(USART2, encoder_get_direction(TIM3) == ENCODER_DIR_UP
-                                      ? "  dir=UP"
-                                      : "  dir=DOWN");
-        uart_write_string(USART2, "  delta=");
-        uart2_write_i32(delta);
-        uart_write_string(USART2, "  rpm=");
-        uart2_write_rpm(rpm);
-        uart_write_string(USART2, "  isr_fires=");
-        uart2_write_u32(isr_fire_count);
-        uart_write_string(USART2, "\r\n");
-
+    if (sample_ready) {
+      sample_ready = 0;
+      int16_t delta = latest_delta;
+      float rpm = latest_rpm;
+      float duty = latest_duty;
+      uart_write_string(USART2, "tick ");
+      uart2_write_u32(count++);
+      uart_write_string(USART2, "  enc_cnt=");
+      uart2_write_u32(encoder_get_count(TIM3));
+      uart_write_string(USART2, encoder_get_direction(TIM3) == ENCODER_DIR_UP
+                                    ? "  dir=UP"
+                                    : "  dir=DOWN");
+      uart_write_string(USART2, "  delta=");
+      uart2_write_i32(delta);
+      uart_write_string(USART2, "  rpm=");
+      uart2_write_rpm(rpm);
+      uart_write_string(USART2, "  duty=");
+      uart2_write_rpm(duty);
+      uart_write_string(USART2, "  isr_fires=");
+      uart2_write_u32(isr_fire_count);
+      uart_write_string(USART2, "\r\n");
     }
-
   }
 }

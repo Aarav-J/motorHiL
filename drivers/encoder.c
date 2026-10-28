@@ -29,9 +29,17 @@ void encoder_init(TIM_TypeDef *TIMx, encoder_mode_t mode, uint32_t arr) {
   // engine 1)
   //  CC2S = 01 maps Ti2 -> IC2 Direct mapping so signal from T2 to IC2(capture
   //  engine 2)
-  /// Capture prescaler left at the reset value of 0
-  TIMx->CCMR1 &= ~((0x3u << 0) | (0x3u << 8)); // Clearing CC1S and CC2S bits
-  TIMx->CCMR1 |= (0x1U << 0) | (0x1U << 8); // Setting CC1S and CC2S bits to 01
+  // IC1F/IC2F = 0011 -> fSAMPLING=fCK_INT (16MHz), N=8 consecutive samples
+  // required before a transition counts (500ns filter window). Rejects
+  // short electrical glitches without meaningfully delaying real edges --
+  // a mechanical quadrature encoder's edges are always far slower than
+  // 500ns apart, even at high RPM. Capture prescaler (IC1PSC/IC2PSC) left
+  // at the reset value of 0 -- capture every filtered edge, no skipping.
+  TIMx->CCMR1 &= ~((0x3u << 0) | (0xFu << 4) | (0x3u << 8) | (0xFu << 12));
+  TIMx->CCMR1 |= (0x1U << 0);  // CC1S = 01
+  TIMx->CCMR1 |= (0x3U << 4);  // IC1F = 0011
+  TIMx->CCMR1 |= (0x1U << 8);  // CC2S = 01
+  TIMx->CCMR1 |= (0x3U << 12); // IC2F = 0011
 
   // CC1E and CC2E bits to enable capture on each channel from the TI1 and TI2
   // inputs CC2P and CC2NP bits cleared to 0 so rizing edge, non-inverted
@@ -68,22 +76,23 @@ void encoder_reset_count(TIM_TypeDef *TIMx) {
   TIMx->CNT = 0;
 }
 
-int16_t encoder_get_delta(TIM_TypeDef *TIMx, uint16_t* last_count) { 
-    if(!encoder_supported(TIMx)) { 
-        return 0; 
-    }
+int16_t encoder_get_delta(TIM_TypeDef *TIMx, uint16_t *last_count) {
+  if (!encoder_supported(TIMx)) {
+    return 0;
+  }
 
-    uint16_t current_count = TIMx->CNT; 
-    uint16_t raw_diff = current_count-(*last_count); 
-    int16_t diff = (int16_t)raw_diff;
-    *last_count = current_count;
-    return diff; 
+  uint16_t current_count = TIMx->CNT;
+  uint16_t raw_diff = current_count - (*last_count);
+  int16_t diff = (int16_t)raw_diff;
+  *last_count = current_count;
+  return diff;
 }
 
-float encoder_get_rpm(int16_t delta, uint32_t delta_time_ms, uint16_t counts_per_rev) { 
-    float revolutions = (float) delta / (float) counts_per_rev; 
+float encoder_get_rpm(int16_t delta, uint32_t delta_time_ms,
+                      uint16_t counts_per_rev) {
+  float revolutions = (float)delta / (float)counts_per_rev;
 
-    float rpm = revolutions * (60000.0f / (float) delta_time_ms); 
+  float rpm = revolutions * (60000.0f / (float)delta_time_ms);
 
-    return rpm;
+  return rpm;
 }
