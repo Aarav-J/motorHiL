@@ -1,0 +1,32 @@
+/*
+ * Board overlay for the HIL test node (ESP32-S3-DevKitC).
+ *
+ * Intentionally left mostly empty -- the quadrature-output peripheral
+ * choice needs to be decided before any pin assignments go here, and it's
+ * a real decision, not a default to copy from the unrelated amp/zephyr_impl
+ * project's single-channel servo-PWM overlay:
+ *
+ *   - LEDC (the peripheral amp/zephyr_impl uses for its single servo PWM
+ *     channel): straightforward for one independent PWM output, but
+ *     generating two channels with an exact, stable 90-degree phase
+ *     relationship between them needs to be verified -- if each LEDC
+ *     channel just runs its own independent clock with no phase
+ *     coordination, the two channels could drift apart over time instead
+ *     of staying locked in quadrature, which would look like exactly the
+ *     kind of transition-boundary glitch we saw and diagnosed from the
+ *     AD2's channel skew.
+ *   - MCPWM (ESP32's "Motor Control PWM" peripheral): purpose-built for
+ *     motor-control-style multi-channel synchronized PWM generation,
+ *     likely has proper phase-lock support, but needs checking whether
+ *     Zephyr's ESP32 HAL exposes MCPWM at all and to what extent.
+ *   - Bit-banged GPIO driven by a hardware timer ISR: most control over
+ *     exact phase relationship (same approach TIM3's encoder mode
+ *     effectively expects to receive), but is software-driven generation,
+ *     not hardware-driven -- same class of timing-jitter risk Zephyr's
+ *     RTOS scheduling could introduce if this isn't anchored to a real
+ *     hardware timer interrupt rather than a k_sleep() loop.
+ *
+ * Also needed here once decided: whatever's required to read the STM32's
+ * PWM duty cycle on the input side (GPIO interrupt-based edge-timing
+ * capture, since LEDC is output-only).
+ */
