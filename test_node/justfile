@@ -1,25 +1,23 @@
-# HIL test node (ESP32-S3) build commands.
-# Points at the shared Zephyr workspace -- ~/Desktop/CODE/zephyr-workspace/zephyr --
-# not a local copy. See amp/zephyr_impl for the sibling project this was
-# split out of; this one is NOT part of that project, just shares the same
-# underlying Zephyr+HAL install to avoid a second multi-GB checkout.
 
 SIM_BOARD := "qemu_x86"
 ESP_BOARD := "esp32s3_devkitc/esp32s3/procpu"
-ESP_PORT := "/dev/ttyUSB0"
+ESP_PORT := "/dev/cu.usbserial-1140" # CP2102N UART bridge; verify with `python3 -m serial.tools.list_ports -v` if it changes
 CMAKE_CACHE_ARGS := "-- -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
 WEST_WORKSPACE := "/Users/aaravjain/Desktop/CODE/zephyr-workspace/zephyr"
 APP_DIR := justfile_directory()
 BUILD_DIR := justfile_directory() + "/build"
+VENV_BIN := "/Users/aaravjain/Desktop/CODE/amp/zephyr_impl/firmware/.venv/bin"
+WEST := VENV_BIN + "/west"
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 set working-directory := "/Users/aaravjain/Desktop/CODE/zephyr-workspace/zephyr"
+export PATH := VENV_BIN + ":" + env("PATH")
 
 _verify_workspace:
     test -f .west/config || { echo "ERROR: West workspace config missing in {{ WEST_WORKSPACE }}/.west/config."; exit 1; }
 
 build-sim: _verify_workspace clean
-    west build \
+    {{ WEST }} build \
       -p always \
       -b {{ SIM_BOARD }} \
       -d "{{ BUILD_DIR }}" \
@@ -27,21 +25,22 @@ build-sim: _verify_workspace clean
       {{ CMAKE_CACHE_ARGS }}
 
 run-sim: build-sim
-    west build -t run -d "{{ BUILD_DIR }}"
+    {{ WEST }} build -t run -d "{{ BUILD_DIR }}"
 
 build-esp32: _verify_workspace clean
-    west build \
+    {{ WEST }} build \
       -p always \
       -b "{{ ESP_BOARD }}" \
       -d "{{ BUILD_DIR }}" \
       "{{ APP_DIR }}" \
-      {{ CMAKE_CACHE_ARGS }}
+      {{ CMAKE_CACHE_ARGS }} \
+      -DEXTRA_DTC_OVERLAY_FILE="{{ APP_DIR }}/boards/esp32s3_devkitc.overlay"
 
 flash-esp32:
-    west flash --build-dir "{{ BUILD_DIR }}"
+    {{ WEST }} flash --build-dir "{{ BUILD_DIR }}"
 
 monitor-esp32:
-    python3 -m serial.tools.miniterm "{{ ESP_PORT }}" 115200
+    {{ VENV_BIN }}/python3 -m serial.tools.miniterm "{{ ESP_PORT }}" 115200
 
 run-esp32: build-esp32 flash-esp32 monitor-esp32
 

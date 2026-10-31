@@ -1,47 +1,49 @@
-/*
- * HIL test node entry point -- scaffold only.
- *
- * This compiles and boots, logs a heartbeat, and nothing else yet. The
- * three real jobs (PWM duty capture, plant simulation + quadrature
- * generation, laptop command channel) are deliberately not implemented
- * here -- see prj.conf and boards/esp32s3_devkitc.overlay for the open
- * peripheral-choice decisions that need resolving first.
- */
-
+#include <zephyr/drivers/counter.h> 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(hil_test_node, LOG_LEVEL_INF);
+#define TEST_INTERVAL_US 50000U
+#define ALARM_CHAN_ID 0
 
-/* Low-priority diagnostic thread -- separate from whatever ends up doing
- * the time-critical plant-update work, same split as the STM32 side's
- * ISR-does-minimal-work / main()-does-reporting principle. Fill in real
- * telemetry (simulated speed, fault state, last command received, etc.)
- * once the plant model exists. */
-#define DIAG_STACK_SIZE 2048
-#define DIAG_PRIORITY                                                          \
-  10 /* low priority: only runs when nothing else is ready */
-#define DIAG_PERIOD_MS 2000
 
-K_THREAD_STACK_DEFINE(diag_stack, DIAG_STACK_SIZE);
-static struct k_thread diag_thread_data;
+static const struct device *const count_dev = DEVICE_DT_GET(DT_CHILD(DT_NODELABEL(timer0), counter)); 
 
-static void diag_thread(void *p1, void *p2, void *p3) {
-  ARG_UNUSED(p1);
-  ARG_UNUSED(p2);
-  ARG_UNUSED(p3);
 
-  while (1) {
-    k_sleep(K_MSEC(DIAG_PERIOD_MS));
-    LOG_INF("heartbeat: uptime=%u ms", k_uptime_get_32());
-  }
+static volatile uint32_t alarm_count = 0; 
+static struct counter_alarm_cfg alarm_cfg; 
+
+
+static void counter_alarm_callback(const struct device *dev, uint8_t chan_id, uint32_t ticks, void *user_data) { 
+
+    alarm_count++; 
+    counter_set_channel_alarm(dev, chan_id, &alarm_cfg); 
+
 }
 
+
 int main(void) {
-  LOG_INF("HIL test node booting");
+    LOG_INF("HIL test node booting");
+    if(!device_is_ready(count_dev)) { 
+        LOG_ERR("Counter device not ready");
+        return -1; 
+    }
+    counter_start(count_dev);
+    alarm_cfg.callback = counter_alarm_callback;
+    alarm_cfg.ticks = counter_us_to_ticks(count_dev, TEST_INTERVAL_US); 
+    alarm_cfg.user_data = NULL; 
+    alarm_cfg.flags = 0; 
+    
+    int err = counter_set_channel_alarm(count_dev, ALARM_CHAN_ID, &alarm_cfg); 
+    if(err != 0) { 
+        LOG_ERR("Failed to set alarm: %d", err); 
+        return -1; 
+    }
+    while (1) {
+        k_sleep(K_SECONDS(2));
+        LOG_INF("heartbeat: uptime=%u ms", k_uptime_get_32());
+        LOG_INF("alarm_count=%u", alarm_count);
+    }
 
-  k_thread_create(&diag_thread_data, diag_stack, DIAG_STACK_SIZE, diag_thread,
-                  NULL, NULL, NULL, DIAG_PRIORITY, 0, K_NO_WAIT);
-
-  return 0;
+    return 0;
 }
