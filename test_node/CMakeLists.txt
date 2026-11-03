@@ -4,4 +4,5 @@ project(hil_test_node)
 
 target_sources(app PRIVATE
     src/main.c
+    src/drivers/quadrature.c
 )
