@@ -105,21 +105,30 @@ static void delay_ms(uint32_t ms) {
   SysTick->CTRL = 0;
 }
 
-// TIM4_CH1 PWM on PB6 (Arduino header D10), 1kHz / 75% duty
+// TIM4_CH1 PWM on PB6 (D10) drives DRV8871 IN1, TIM4_CH3 PWM on PB8 (D15)
+// drives IN2 -- sign-magnitude drive: exactly one channel active at a
+// time (see DRV8871 truth table), the other held at 0% duty == logic
+// low. Channel 3 starts at 0% here deliberately -- direction-selection
+// logic (deciding which channel gets nonzero duty) doesn't exist yet;
+// leaving both channels free-running would fight each other.
 static void tim4_pwm_init(void) {
   gpio_config_t pwm_pin_cfg = {
       .mode = GPIO_MODE_ALTERNATE,
       .otype = GPIO_OUTPUT_PUSH_PULL,
       .speed = GPIO_SPEED_LOW,
       .pull = GPIO_PULL_NONE,
-      .alternate_function = 2, /* AF2 = TIM4 on PB6 (TIM4_CH1) */
+      .alternate_function = 2, /* AF2 = TIM4 on both PB6 (CH1) and PB8 (CH3) */
   };
   gpio_init(GPIOB, 6, &pwm_pin_cfg);
+  gpio_init(GPIOB, 8, &pwm_pin_cfg);
 
-  // 16MHz / (0+1) / 16000 = 1kHz
-  pwm_timer_init(TIM4, 16000 - 1, 1000 - 1);
+  // counter_clock = 16MHz / (PSC+1) = 16MHz/16 = 1MHz (1us/tick)
+  // PWM freq = counter_clock / (ARR+1) = 1MHz/1000 = 1kHz
+  pwm_timer_init(TIM4, 15, 999);
   pwm_channel_init(TIM4, 1, PWM_MODE_1);
+  pwm_channel_init(TIM4, 3, PWM_MODE_1);
   pwm_set_duty_percent(TIM4, 1, 75.0f);
+  pwm_set_duty_percent(TIM4, 3, 0.0f);
 }
 
 static void TIM3_encoder_init(void) {
